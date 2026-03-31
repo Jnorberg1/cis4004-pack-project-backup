@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from "react";
 import api from "../api/api";
 
@@ -6,8 +7,9 @@ export default function AdminDashboard() {
   const [categories, setCategories] = useState([]);
   const [rarities, setRarities] = useState([]);
   const [message, setMessage] = useState("");
+  const [editingId, setEditingId] = useState(null);
 
-  const [form, setForm] = useState({
+  const emptyForm = {
     name: "",
     brand: "",
     description: "",
@@ -15,37 +17,11 @@ export default function AdminDashboard() {
     rarity: "",
     categories: [],
     valueScore: 0,
-  });
+  };
 
-  useEffect(() => {
-    const loadAdminData = async () => {
-      try {
-        const [shirtsRes, categoriesRes, raritiesRes] = await Promise.all([
-          api.get("/admin/shirts"),
-          api.get("/admin/categories"),
-          api.get("/admin/rarities"),
-        ]);
+  const [form, setForm] = useState(emptyForm);
 
-        setShirts(shirtsRes.data);
-        setCategories(categoriesRes.data);
-        setRarities(raritiesRes.data);
-        setMessage("");
-      } catch (error) {
-        console.error("Admin fetch error:", error);
-        if (error.response?.status === 403) {
-          setMessage("Admin access only.");
-        } else if (error.response?.status === 401) {
-          setMessage("You must be logged in as admin.");
-        } else {
-          setMessage("Could not load admin data.");
-        }
-      }
-    };
-
-    loadAdminData();
-  }, []);
-
-  const refreshAdminData = async () => {
+  const loadAdminData = async () => {
     try {
       const [shirtsRes, categoriesRes, raritiesRes] = await Promise.all([
         api.get("/admin/shirts"),
@@ -58,10 +34,20 @@ export default function AdminDashboard() {
       setRarities(raritiesRes.data);
       setMessage("");
     } catch (error) {
-      console.error("Admin refresh error:", error);
-      setMessage("Could not refresh admin data.");
+      console.error("Admin fetch error:", error);
+      if (error.response?.status === 403) {
+        setMessage("Admin access only.");
+      } else if (error.response?.status === 401) {
+        setMessage("You must be logged in as admin.");
+      } else {
+        setMessage("Could not load admin data.");
+      }
     }
   };
+
+  useEffect(() => {
+    loadAdminData();
+  }, []);
 
   const handleCategoryChange = (categoryId) => {
     setForm((prev) => {
@@ -76,42 +62,62 @@ export default function AdminDashboard() {
     });
   };
 
-  const handleCreateShirt = async (e) => {
+  const handleCreateOrUpdateShirt = async (e) => {
     e.preventDefault();
 
     try {
-      await api.post("/admin/shirts", {
+      const payload = {
         ...form,
         valueScore: Number(form.valueScore),
-      });
+      };
 
-      setForm({
-        name: "",
-        brand: "",
-        description: "",
-        image: "",
-        rarity: "",
-        categories: [],
-        valueScore: 0,
-      });
+      if (editingId) {
+        await api.put(`/admin/shirts/${editingId}`, payload);
+        setMessage("Shirt updated successfully.");
+      } else {
+        await api.post("/admin/shirts", payload);
+        setMessage("Shirt created successfully.");
+      }
 
-      setMessage("Shirt created successfully.");
-      refreshAdminData();
+      setForm(emptyForm);
+      setEditingId(null);
+      loadAdminData();
     } catch (error) {
-      console.error("Create shirt error:", error);
-      setMessage(error.response?.data?.message || "Could not create shirt.");
+      console.error("Create/update shirt error:", error);
+      setMessage(error.response?.data?.message || "Could not save shirt.");
     }
+  };
+
+  const handleEditShirt = (shirt) => {
+    setEditingId(shirt._id);
+    setForm({
+      name: shirt.name || "",
+      brand: shirt.brand || "",
+      description: shirt.description || "",
+      image: shirt.image || "",
+      rarity: shirt.rarity?._id || "",
+      categories: shirt.categories?.map((c) => c._id) || [],
+      valueScore: shirt.valueScore ?? 0,
+    });
+    setMessage(`Editing ${shirt.name}`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDeleteShirt = async (id) => {
     try {
       await api.delete(`/admin/shirts/${id}`);
       setMessage("Shirt deleted.");
-      refreshAdminData();
+      loadAdminData();
     } catch (error) {
       console.error("Delete shirt error:", error);
       setMessage(error.response?.data?.message || "Could not delete shirt.");
     }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setMessage("Edit canceled.");
   };
 
   return (
@@ -127,9 +133,9 @@ export default function AdminDashboard() {
           marginBottom: "24px",
         }}
       >
-        <h2>Create New Shirt</h2>
+        <h2>{editingId ? "Edit Shirt" : "Create New Shirt"}</h2>
 
-        <form onSubmit={handleCreateShirt}>
+        <form onSubmit={handleCreateOrUpdateShirt}>
           <div style={{ marginBottom: "10px" }}>
             <label>Shirt Name</label>
             <br />
@@ -215,7 +221,19 @@ export default function AdminDashboard() {
             ))}
           </div>
 
-          <button type="submit">Create Shirt</button>
+          <button type="submit">
+            {editingId ? "Update Shirt" : "Create Shirt"}
+          </button>
+
+          {editingId && (
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              style={{ marginLeft: "10px" }}
+            >
+              Cancel Edit
+            </button>
+          )}
         </form>
       </div>
 
@@ -245,7 +263,14 @@ export default function AdminDashboard() {
             <p><strong>Value Score:</strong> {shirt.valueScore}</p>
             <p><strong>Description:</strong> {shirt.description}</p>
 
-            <button onClick={() => handleDeleteShirt(shirt._id)}>
+            <button onClick={() => handleEditShirt(shirt)}>
+              Edit Shirt
+            </button>
+
+            <button
+              onClick={() => handleDeleteShirt(shirt._id)}
+              style={{ marginLeft: "10px" }}
+            >
               Delete Shirt
             </button>
           </div>

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from "react";
 import api from "../api/api";
 
@@ -5,42 +6,41 @@ export default function CollectionPage() {
   const [collection, setCollection] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
 
-  useEffect(() => {
-    const fetchCollection = async () => {
-      try {
-        const res = await api.get("/collection");
-        setCollection(res.data);
-        setErrorMessage("");
-      } catch (error) {
-        console.error("Error fetching collection:", error);
-
-        if (error.response?.status === 401) {
-          setErrorMessage("You need to log in to view your collection.");
-        } else {
-          setErrorMessage("Could not load collection.");
-        }
-      }
-    };
-
-    fetchCollection();
-  }, []);
-
-  const refreshCollection = async () => {
+  const fetchCollection = async () => {
     try {
       const res = await api.get("/collection");
       setCollection(res.data);
       setErrorMessage("");
     } catch (error) {
-      console.error("Error refreshing collection:", error);
+      console.error("Error fetching collection:", error);
+
+      if (error.response?.status === 401) {
+        setErrorMessage("You need to log in to view your collection.");
+      } else {
+        setErrorMessage("Could not load collection.");
+      }
     }
   };
+
+  useEffect(() => {
+    fetchCollection();
+  }, []);
 
   const toggleFavorite = async (id) => {
     try {
       await api.put(`/collection/favorite/${id}`);
-      refreshCollection();
+      fetchCollection();
     } catch (error) {
       console.error("Error updating favorite:", error);
+    }
+  };
+
+  const deleteCollectionItem = async (id) => {
+    try {
+      await api.delete(`/collection/${id}`);
+      fetchCollection();
+    } catch (error) {
+      console.error("Error deleting collection item:", error);
     }
   };
 
@@ -73,6 +73,13 @@ export default function CollectionPage() {
 
           <button onClick={() => toggleFavorite(item._id)}>
             {item.isFavorite ? "Remove Favorite" : "Add to Favorites"}
+          </button>
+
+          <button
+            onClick={() => deleteCollectionItem(item._id)}
+            style={{ marginLeft: "10px" }}
+          >
+            Remove From Collection
           </button>
         </div>
       ))}
