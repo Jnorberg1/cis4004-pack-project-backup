@@ -1,17 +1,24 @@
 import CollectionEntry from "../models/CollectionEntry.js";
+import "../models/Rarity.js";
+import "../models/Category.js";
+
 
 export const getMyCollection = async (req, res) => {
   try {
     const items = await CollectionEntry.find({ user: req.user.id })
       .populate({
         path: "shirt",
-        populate: ["rarity", "categories"],
+        populate: [
+          { path: "rarity" },
+          { path: "categories" },
+        ],
       })
       .populate("pack")
       .sort({ createdAt: -1 });
 
     res.json(items);
   } catch (error) {
+    console.error("Collection fetch error:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -32,6 +39,7 @@ export const toggleFavorite = async (req, res) => {
 
     res.json(item);
   } catch (error) {
+    console.error("Favorite toggle error:", error);
     res.status(500).json({ message: error.message });
   }
 };
